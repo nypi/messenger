@@ -1,7 +1,9 @@
 package ru.croc.jws.messenger.client;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 import javafx.application.Application;
 import javafx.event.ActionEvent;
@@ -25,15 +27,26 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import ru.croc.jws.messenger.common.Message;
+import ru.croc.jws.messenger.common.User;
 
 public class App extends Application {
+
+	private Client client;
+
+	private User user;
 
 	public static void main(String[] args) {
 		launch(args);
 	}
 
+	public App() {
+		this.client = new Client("localhost", 7777);
+		this.user = new User("anonymous");
+	}
+
 	@Override
-	public void start(Stage primaryStage) {
+	public void start(Stage primaryStage) throws IOException {
 		int maxWidth = 1000;
 		int maxHeight = 1000;
 
@@ -62,26 +75,38 @@ public class App extends Application {
 				new Date());
 		chatBox.getChildren().add(messageFromDaisy);
 
-		TextField message = new TextField();
-		message.setPrefWidth(maxWidth);
-		grid.add(message, 0, 2);
+		TextField messageField = new TextField();
+		messageField.setPrefWidth(maxWidth);
+		grid.add(messageField, 0, 2);
 
 		Button send = new Button("Say!");
 		send.setMinWidth(70);
 		send.setOnAction(new EventHandler<ActionEvent>() {
 			@Override
 			public void handle(ActionEvent event) {
-				String text = message.getText();
-				VBox messageFromDaisy = createMessageBox(
-						"me",
-						text,
-						new Date());
-				chatBox.getChildren().add(messageFromDaisy);
+				String text = messageField.getText();
+
+				Message message = new Message(user, text);
+				VBox messageBox = createMessageBox(
+						message.getUser().getName(),
+						message.getText(),
+						message.getTime());
+				chatBox.getChildren().add(messageBox);
 				scroll.setVvalue(1.0);
-				message.setText("");
+
+				try {
+					client.sendMessage(message);
+					messageField.setText("");
+				} catch (IOException e) {
+					messageBox.setBackground(new Background(new BackgroundFill(
+							Color.RED,
+							new CornerRadii(8),
+							Insets.EMPTY)));
+					e.printStackTrace();
+				}
 			}
 		});
-		message.setOnKeyPressed(new EventHandler<KeyEvent>() {
+		messageField.setOnKeyPressed(new EventHandler<KeyEvent>() {
 			@Override
 			public void handle(KeyEvent event) {
 				if (event.getCode().equals(KeyCode.ENTER))
@@ -94,6 +119,16 @@ public class App extends Application {
 		primaryStage.setTitle("Messenger");
 		primaryStage.setScene(scene);
 		primaryStage.show();
+
+		// load messages from server
+		List<Message> messages = client.getMessages(new Date(0L));
+		for (Message message : messages) {
+			VBox messageBox = createMessageBox(
+					message.getUser().getName(),
+					message.getText(),
+					message.getTime());
+			chatBox.getChildren().add(messageBox);
+		}
 	}
 
 	private VBox createMessageBox(String username, String text, Date time) {
