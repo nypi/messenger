@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.List;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
@@ -32,9 +33,16 @@ import ru.croc.jws.messenger.common.User;
 
 public class App extends Application {
 
-	private Client client;
+	private final Client client;
+	private final User user;
 
-	private User user;
+	private long t = 0L;
+	private Thread updateThread;
+
+	// ui elements
+	private VBox chatBox;
+	private ScrollPane scroll;
+	private TextField messageField;
 
 	public static void main(String[] args) {
 		launch(args);
@@ -42,11 +50,11 @@ public class App extends Application {
 
 	public App() {
 		this.client = new Client("localhost", 7777);
-		this.user = new User("anonymous");
+		this.user = new User(Names.randomName());
 	}
 
 	@Override
-	public void start(Stage primaryStage) throws IOException {
+	public void start(Stage primaryStage) {
 		int maxWidth = 1000;
 		int maxHeight = 1000;
 
@@ -56,62 +64,37 @@ public class App extends Application {
 		grid.setVgap(10);
 		grid.setPadding(new Insets(10));
 
-		Label chatName = new Label("Chat with daisy:");
+		Label chatName = new Label("Croc Java Chat [@" + user.getName() + "]");
 		grid.add(chatName, 0, 0, 2, 1);
 
-		VBox chatBox = new VBox();
+		chatBox = new VBox();
 		chatBox.setFillWidth(false);
-		ScrollPane scroll = new ScrollPane(chatBox);
+		scroll = new ScrollPane(chatBox);
 		scroll.setBackground(new Background(
 				new BackgroundFill(Color.TRANSPARENT, null, null)));
 		scroll.setPrefWidth(maxWidth);
 		scroll.setPrefHeight(maxHeight);
 		grid.add(scroll, 0, 1, 2, 1);
+		chatBox.heightProperty().addListener(observable -> scroll.setVvalue(1.0));
 
 		// sample message
-		VBox messageFromDaisy = createMessageBox(
-				"daisy",
-				"Hi :)",
-				new Date());
-		chatBox.getChildren().add(messageFromDaisy);
-
-		TextField messageField = new TextField();
+		messageField = new TextField();
 		messageField.setPrefWidth(maxWidth);
 		grid.add(messageField, 0, 2);
 
 		Button send = new Button("Say!");
 		send.setMinWidth(70);
-		send.setOnAction(new EventHandler<ActionEvent>() {
-			@Override
-			public void handle(ActionEvent event) {
-				String text = messageField.getText();
+		send.setOnAction(event -> {
+			String text = messageField.getText();
+			if (text.isEmpty())
+				return;
 
-				Message message = new Message(user, text);
-				VBox messageBox = createMessageBox(
-						message.getUser().getName(),
-						message.getText(),
-						message.getTime());
-				chatBox.getChildren().add(messageBox);
-				scroll.setVvalue(1.0);
-
-				try {
-					client.sendMessage(message);
-					messageField.setText("");
-				} catch (IOException e) {
-					messageBox.setBackground(new Background(new BackgroundFill(
-							Color.RED,
-							new CornerRadii(8),
-							Insets.EMPTY)));
-					e.printStackTrace();
-				}
-			}
+			Message message = new Message(user, text);
+			sendMessage(message);
 		});
-		messageField.setOnKeyPressed(new EventHandler<KeyEvent>() {
-			@Override
-			public void handle(KeyEvent event) {
-				if (event.getCode().equals(KeyCode.ENTER))
-					send.fire();
-			}
+		messageField.setOnKeyPressed(event -> {
+			if (event.getCode().equals(KeyCode.ENTER))
+				send.fire();
 		});
 		grid.add(send, 1, 2);
 
@@ -121,22 +104,21 @@ public class App extends Application {
 		primaryStage.show();
 
 		// load messages from server
-		List<Message> messages = client.getMessages(new Date(0L));
-		for (Message message : messages) {
-			VBox messageBox = createMessageBox(
-					message.getUser().getName(),
-					message.getText(),
-					message.getTime());
-			chatBox.getChildren().add(messageBox);
-		}
+		updateThread = new Thread(new UpdateChatTask());
+		updateThread.start();
 	}
 
-	private VBox createMessageBox(String username, String text, Date time) {
+	@Override
+	public void stop() {
+		updateThread.interrupt();
+	}
+
+	private VBox createMessageBox(Message message) {
 		int messageWidth = 300;
 
-		Color color = username.equals("me")
-				? Color.WHITE
-				: Color.BISQUE;
+		Color color = message.getUser().equals(user)
+				? Color.BISQUE
+				: Color.WHITE;
 
 		VBox messageBox = new VBox();
 		messageBox.setPadding(new Insets(3, 10, 3, 10));
@@ -148,7 +130,7 @@ public class App extends Application {
 				Insets.EMPTY)));
 		// user
 		Label messageUser = new Label();
-		messageUser.setText(username);
+		messageUser.setText(message.getUser().getName());
 		messageUser.setFont(Font.font(
 				"Arial",
 				FontWeight.BOLD,
@@ -157,13 +139,13 @@ public class App extends Application {
 		messageBox.getChildren().add(messageUser);
 		// text
 		Text messageText = new Text();
-		messageText.setText(text);
+		messageText.setText(message.getText());
 		messageText.setWrappingWidth(messageWidth);
 		messageBox.getChildren().add(messageText);
 		// time
 		SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
 		Label messageTime = new Label();
-		messageTime.setText(sdf.format(time));
+		messageTime.setText(sdf.format(message.getTime()));
 		messageTime.setTextFill(Color.DARKSEAGREEN);
 		messageTime.setPadding(new Insets(3, 0, 0, 0));
 		messageBox.getChildren().add(messageTime);
@@ -173,5 +155,50 @@ public class App extends Application {
 		container.getChildren().add(messageBox);
 		container.setAlignment(Pos.TOP_RIGHT);
 		return container;
+	}
+
+	private synchronized void sendMessage(Message message) {
+		if (message == null)
+			return;
+		try {
+			client.sendMessage(message);
+			messageField.setText("");
+			messageField.setStyle("-fx-text-fill: black;");
+		} catch (IOException e) {
+			messageField.setStyle("-fx-text-fill: red;");
+			e.printStackTrace();
+		}
+	}
+
+	private synchronized void updateChat() {
+		List<Message> messages;
+		try {
+			messages = client.getMessages(new Date(t));
+		} catch (IOException e) {
+			// do nothing
+			return;
+		}
+		for (Message message : messages) {
+			VBox messageBox = createMessageBox(message);
+			Platform.runLater(() -> {
+				chatBox.getChildren().add(messageBox);
+			});
+			t = Math.max(t, message.getTime().getTime() + 1);
+		}
+	}
+
+	private class UpdateChatTask implements Runnable {
+
+		@Override
+		public void run() {
+			while (!Thread.interrupted()) {
+				updateChat();
+				try {
+					Thread.sleep(1_000L);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
+		}
 	}
 }

@@ -1,10 +1,5 @@
 package ru.croc.jws.messenger.server;
 
-import ru.croc.jws.messenger.common.Chat;
-import ru.croc.jws.messenger.common.GroupChat;
-import ru.croc.jws.messenger.common.Message;
-import ru.croc.jws.messenger.common.User;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,14 +8,20 @@ import java.io.Writer;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
+
+import ru.croc.jws.messenger.common.Message;
+import ru.croc.jws.messenger.common.User;
 
 public class Server {
 
-	private MessageRepository messages = new MessageRepository();
-
 	private final int port;
+
+	private final MessageRepository messageRepository = new MessageRepository();
+	private final Map<User, Bot> bots = new HashMap<>();
 
 	public Server() {
 		this(7777);
@@ -28,6 +29,13 @@ public class Server {
 
 	public Server(int port) {
 		this.port = port;
+
+		registerBots();
+	}
+
+	private void registerBots() {
+		Bot daisyBot = new DaisyBot();
+		bots.put(daisyBot.getUser(), daisyBot);
 	}
 
 	public void start() throws IOException {
@@ -45,12 +53,20 @@ public class Server {
 							String text = s.nextLine();
 							User user = new User(username);
 							Message message = new Message(user, text);
-							messages.addMessage(message);
+
+							messageRepository.addMessage(message);
+							User mention = message.getMention();
+							if (mention != null) {
+								Bot bot = bots.get(mention);
+								if (bot != null) {
+									bot.onMessage(message, messageRepository);
+								}
+							}
 							break;
 						case 1:
 							String timeStr = s.nextLine();
 							Date time = new Date(Long.parseLong(timeStr));
-							List<Message> result = messages.findMessagesAfter(time);
+							List<Message> result = messageRepository.findMessagesAfter(time);
 
 							// return result to a client
 							OutputStream out = socket.getOutputStream();

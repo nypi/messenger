@@ -1,19 +1,18 @@
 package ru.croc.jws.messenger.client;
 
-import ru.croc.jws.messenger.common.Message;
-import ru.croc.jws.messenger.common.User;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.StringWriter;
 import java.io.Writer;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
+
+import ru.croc.jws.messenger.common.Message;
+import ru.croc.jws.messenger.common.User;
 
 public class Client {
 
@@ -31,7 +30,7 @@ public class Client {
 
 	public void sendMessage(Message message) throws IOException {
 		if (message == null)
-			throw new IllegalArgumentException("message is null");
+			throw new IllegalArgumentException();
 
 		// send message
 		try (Socket socket = new Socket(host, port)) {
@@ -41,7 +40,7 @@ public class Client {
 				w.write("\n");
 				w.write(message.getUser().getName());
 				w.write("\n");
-				String messageText = message.getText().replaceAll("\n", " ");
+				String messageText = message.getTextLine();
 				w.write(messageText);
 				w.write("\n");
 			}
