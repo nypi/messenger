@@ -64,7 +64,7 @@ public class App extends Application {
 		grid.setVgap(10);
 		grid.setPadding(new Insets(10));
 
-		Label chatName = new Label("Croc Java Chat [@" + user.getName() + "]");
+		Label chatName = new Label("Croc Java Chat [" + user + "]");
 		grid.add(chatName, 0, 0, 2, 1);
 
 		chatBox = new VBox();
