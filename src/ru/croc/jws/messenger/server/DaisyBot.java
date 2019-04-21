@@ -20,9 +20,6 @@ public class DaisyBot implements Bot {
 		String text = rnd.nextInt(7) == 0
 				? "no!!"
 				: "yes))";
-		Message replyFromDaisy = new Message(
-				daisy,
-				Message.textWithMention(message.getUser(), text));
 
 		// imitate delay: do not reply instantly
 		int delaySeconds = 1 + rnd.nextInt(3);
@@ -31,6 +28,9 @@ public class DaisyBot implements Bot {
 		} catch (InterruptedException e) {
 			return;
 		}
+		Message replyFromDaisy = new Message(
+				daisy,
+				Message.textWithMention(message.getUser(), text));
 		messageRepository.addMessage(replyFromDaisy);
 	}
 }

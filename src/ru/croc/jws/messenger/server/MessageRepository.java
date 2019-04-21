@@ -16,7 +16,7 @@ public class MessageRepository {
 	private List<Message> messages = new ArrayList<>();
 	private Comparator<Message> comparator = new MessageComparator();
 
-    public void addMessage(Message message) {
+    public synchronized void addMessage(Message message) {
 		Objects.requireNonNull(message);
 
 		int i = Collections.binarySearch(messages, message, comparator);
@@ -26,7 +26,7 @@ public class MessageRepository {
 		messages.add(i, message);
     }
 
-    public List<Message> findMessagesAfter(Date time) {
+    public synchronized List<Message> findMessagesAfter(Date time) {
     	Objects.requireNonNull(time);
 
     	List<Message> result = new ArrayList<>();
