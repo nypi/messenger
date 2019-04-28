@@ -15,6 +15,7 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import ru.croc.jws.messenger.DimaZetBot.DimaZetBot;
 import ru.croc.jws.messenger.common.Message;
 import ru.croc.jws.messenger.common.User;
 
@@ -39,7 +40,9 @@ public class Server {
 
 	private void registerBots() {
 		Bot daisyBot = new DaisyBot();
+		Bot dimazet = new DimaZetBot();
 		bots.put(daisyBot.getUser(), daisyBot);
+		bots.put(dimazet.getUser(), dimazet);
 	}
 
 	public void start() throws IOException {
